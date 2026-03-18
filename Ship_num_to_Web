@@ -50,7 +50,3 @@ for url in urls: #直接開啟網頁的方法
     webbrowser.get('C:/Program Files/Google/Chrome/Application/chrome.exe %s').open(url)
     time.sleep(3) #讓自己看起來不要太像機器人
     print(url)
-    
-
-
-'https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?container=FBLU++0112512'
