@@ -1,0 +1,56 @@
+import webbrowser
+import re
+import urllib.request
+import random
+import requests
+from requests import get
+from bs4 import BeautifulSoup
+from bs4.element import Comment
+import time
+#隨機header
+headerlist = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36",
+     "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36 OPR/43.0.2442.991",
+           "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36 OPR/42.0.2393.94",
+           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.78 Safari/537.36 OPR/47.0.2631.39",
+           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36",
+           "Mozilla/5.0 (Windows NT 5.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36",
+           "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36",
+           "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0",
+           "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0",
+           "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0",
+           "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko"]
+
+
+#containerstr = input('container numbers: ')
+container_numbers=()
+con={}
+heads=[]
+tails=[]
+urls=[]
+
+file_name=input('enter file mame:')
+data = open(file_name,'r').read()
+data=data.replace('-','')
+container_numbers=data.split('\n')
+
+#拆解貨櫃號碼
+for number in container_numbers:
+    if len(number)>1:
+        heads.append(number[0:4])
+        tails.append(number[5:13])
+    #print('head:',number[0:5],'tail',number[7:13])
+for i in range(0, len(heads)):
+        url="https://www.maersk.com/tracking/" + heads[i]+ tails[i] 
+        urls.append(url)
+
+user_agent=random.choice(headerlist)
+headers={'User-Agent': user_agent}
+
+for url in urls: #直接開啟網頁的方法
+    webbrowser.get('C:/Program Files/Google/Chrome/Application/chrome.exe %s').open(url)
+    time.sleep(3) #讓自己看起來不要太像機器人
+    print(url)
+    
+
+
+'https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?container=FBLU++0112512'
