@@ -1,0 +1,123 @@
+# importing required modules
+from datetime import date
+import sqlite3
+import PyPDF2
+import re
+import pandas as pd
+import xlsxwriter
+# creating a pdf file object
+file_name=input('enter file mame:')
+pdfFileObj = open(file_name, 'rb')
+today = date.today()
+# creating a pdf reader object
+pdfReader = PyPDF2.PdfReader(pdfFileObj)
+A=[]
+S=[]
+Scommision_num=[]
+Scontainer_num=[]
+Svalues_of_goods=[]
+Spacking_charges=[]
+Sfreight_charges=[]
+Sinvoice_num=[]
+#計算頁數(通常一頁代表一個貨櫃，但可能會重複後面再處理)
+pages = len(pdfReader.pages)
+
+# creating a page object
+# extracting text from page
+
+for i in range(pages):
+    pageObj = pdfReader.pages[i]
+    content = pageObj.extract_text()
+    #print(content)
+    commision_num=re.findall(r"Votre\s*commande\s*/\s*Su\s*pedido\s*([\d-]+)",content)
+    container_num=re.findall(r"CONTAINER\s*NO\.\s*([A-Z0-9\s-]+?)(?=\n|SEAL)",content)
+    values_of_goods=re.findall(r"VALUE\s*OF\s*GOODS\s*TWD\s*([\d\s]+)",content)
+    #values_of_goods.rstrip(',00')
+    packing_charges=re.findall(r"PACKAGING\s*CHARGES\s*TWD\s*([\d\s]+)",content)
+    #packing_charges.replace(',00',"")
+    freight_charges=re.findall(r"FREIGHT\s*CHARGES\s*TWD\s*([\d\s]+)",content)
+    #freight_charges.replace(',00',"")
+    invoice_num=re.findall(r"HSINWU\s*DIST\.\s*(\d+)",content)
+    A=[commision_num,container_num,values_of_goods,packing_charges,freight_charges,invoice_num]
+    S.append(A)
+    CFR_Keelung=re.findall(r"CFRKEELUNGTWD(.*)",content)
+print(S)
+print(type(S))
+#print(commision_num)
+#讀取出來的資料是list，將他轉乘dict
+col0 = "Commision_num"
+col1 = "Container_numbers"
+col2 = "values_of_goods"
+col3 = "packing_charges"
+col4 = "freight_charges"
+col5 = "invoice_num"
+my_dict={'Commision_num','Container_numbers','values_of_goods','packing_charges','freight_charges','invoice_num'}
+#print(S[0][0][0],S[1][0][0],S[2][0][0],S[3][0][0])#Commision_num
+#print(S[0][1][0],S[1][1][0],S[2][1][0],S[3][1][0])#Container numbers
+#print(S[0][2][0],S[1][2][0],S[2][2][0],S[3][2][0])#values_of_goods
+#print(S[0][3][0],S[1][3][0],S[2][3][0],S[3][3][0])#packing_charges
+#print(S[0][4][0],S[1][4][0],S[2][4][0],S[3][4][0])#freight_charges
+#print(S[0][5][0],S[1][5][0],S[2][5][0],S[3][5][0])#invoice_num
+#print(my_dict)
+
+for i in range(0,6): #不論幾櫃只會有六個項目:commision_num,container_num,values_of_goods,packing_charges,freight_charges,invoice_num
+    for j in range(0,pages): #櫃數也是頁數
+        #print(S[j][i][0].replace(',00',''))
+        #B.append(S[j][i][0])
+        #print(B)
+        if i==0:
+            Scommision_num.append(S[j][i][0])
+        if i==1:
+            Scontainer_num.append(S[j][i][0])
+            #my_dict=dict({'Container numbers':Scontainer_num})
+        if i==2:
+            Svalues_of_goods.append(int(S[j][i][0].replace(' ','').strip()))
+            #my_dict=dict({'values_of_goods':Svalues_of_goods})
+        if i==3:
+            Spacking_charges.append(int(S[j][i][0].replace(' ','').strip()))
+            #my_dict=dict({'packing_charges':Spacking_charges})
+        if i==4:
+            Sfreight_charges.append(int(S[j][i][0].replace(' ','').strip()))
+            #my_dict[freight_charges].append(Sfreight_charges)
+        if i==5:
+            Sinvoice_num.append(S[j][i][0])
+print("container_num:",len(pdfReader.pages))
+print(Scommision_num)
+#將資料轉進sqlite及excel的前處理
+data = pd.DataFrame({
+    col0:Scommision_num,
+    col1:Scontainer_num,
+    col2:Svalues_of_goods,
+    col3:Spacking_charges,
+    col4:Sfreight_charges,
+    col5:Sinvoice_num})
+Filename='Con_'+str(today)
+data.to_excel('sample_data.xlsx', sheet_name='Con', index=False) #輸入到excel
+#輸入到sql
+conn=sqlite3.connect('Container.db')
+cursor=conn.cursor()
+cursor.execute('select commision_num from Container where commision_num=?''',(commision_num)) 
+result=cursor.fetchone()#判斷是否有重複，若有重複的批號就不輸入
+if result:
+    cursor.execute('select * from Container where commision_num =?''',(commision_num))
+    data.to_excel('sample_data.xlsx', sheet_name='Con', index=False)
+else:
+#第一次建立sqlite用
+#cursor.execute('CREATE TABLE IF NOT EXISTS Container (Commision_num text,Container_numbers text,values_of_goods number,packing_charges number,freight_charges number,invoice_num)') #不知道這行有什麼問題table Container has no column named Container numbers
+#conn.commit()
+    data.to_sql(name='Container', con=conn, if_exists='append', index=False)
+    #處理sqlite裡面重複的資料
+    cursor.execute('''
+        DELETE FROM Container
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid) FROM Container
+            GROUP BY Commision_num, Container_numbers, values_of_goods, packing_charges, freight_charges, invoice_num
+        )
+    ''')
+    conn.commit()
+    cursor.execute('''select * from Container''')
+    data.to_excel('sample_data.xlsx', sheet_name='Con', index=False)
+    for row in cursor.fetchall():
+        print (row)
+
+pdfFileObj.close()
