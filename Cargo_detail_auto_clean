@@ -1,0 +1,225 @@
+import sqlite3
+import pandas as pd
+from xlsxwriter.workbook import Workbook
+from datetime import date
+
+today = date.today()
+Filename1='ContainerList.db'
+Filename2='ZWA Data.db'
+Filename3='result.db'
+Filename4='Left.db'
+print(Filename1)
+print(Filename2)
+cxn1 = sqlite3.connect(Filename1)
+cxn2 = sqlite3.connect(Filename2)
+#讀取excel資料
+wb1 = pd.read_excel('ZWA DETAILS.xlsx',sheet_name = 'Container List')
+wb2 = pd.read_excel('ZWA DETAILS.xlsx',sheet_name = 'ZWA Data')
+#wb1輸出成sql，不須留著
+wb1.to_sql(name='Containerlist',con=cxn1,if_exists='replace',index=True)#需要加工 刪除前11row並把第12行當作標頭
+#cxn1.execute('DELETE FROM "Container List" WHERE "index" IN (SELECT "index" FROM "Container List" ORDER BY "index" LIMIT 11)')#刪除前11row
+rename='''DELETE FROM "Containerlist" WHERE "index" IN (SELECT "index" FROM "Containerlist" ORDER BY "index" LIMIT 11);
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 0" TO "Container-no.";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 1" TO "Seal no.";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 2" TO "Type";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 3" TO "Commission nos.";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 4" TO "sending nos.";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 5" TO "LU";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 6" TO "Collo description";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 7" TO "Collo number";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 8" TO "Dimensions L";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 9" TO "Dimensions W";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 10" TO "Dimensions H";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 11" TO "Volume";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 12" TO "Gross Weight";
+ALTER TABLE "Containerlist" RENAME COLUMN "Unnamed: 13" TO "Net Weight";
+UPDATE 'Containerlist' SET "Container-no." = replace("Container-no."," ","");
+ALTER TABLE 'Containerlist' add "Collo2" varchar;
+update 'Containerlist' set "Collo2"=trim(substr("Collo description",1,4))
+'''
+cxn1.executescript(rename)#超過一行的sqlite指令改用executescript
+cxn1.commit()#資料上傳
+cxn1.close()#資料庫關起來
+#wb2輸出成sql，要留著
+Comm = wb2['Comm-nos']
+Comm2=list(Comm) #type
+print(Comm2)
+cursor=cxn2.cursor()
+cursor.execute('''select "Comm-nos" from "ZWA Data";''') 
+find=0
+for rows in cursor:
+    #print(rows)
+    for row in rows:
+        print(row,Comm2[1])
+        if row == Comm2[1]:
+            find=1
+            print("data exist")
+        #else: #新資料
+            #print("appending")
+Filename21='ZWA Data_'+str(today)+'.db'
+cxn21 = sqlite3.connect(Filename21)
+wb2.to_sql(name='ZWA Data',con=cxn21,if_exists='replace',index=True)
+if find == 1:
+    cxn2.commit()
+    cxn2.close()
+else:
+    wb2.to_sql(name='ZWA Data',con=cxn2,if_exists='append',index=True)
+    print("append")
+
+conbine='''
+
+attach 'Container2.db' as db_a;
+attach 'ContainerList.db'as db_b;
+attach 'judge.db' as db_c;
+CREATE TABLE result ("Commision_num" TEXT,"Container_numbers" text,"values_of_goods" INTEGER,"packing_charges" INTEGER,"freight_charges" INTEGER,"Collo2" TEXT,"code_long" text);
+INSERT into result 
+select DISTINCT
+  db_a.Container2."Commision_num",
+  db_a.Container2."Container_numbers",
+  db_a.Container2.values_of_goods,
+  db_a.Container2.packing_charges,
+  db_a.Container2.freight_charges,
+  db_b.Containerlist.Collo2,
+  db_c.judge."code_long"
+  
+from
+  db_b.Containerlist
+  inner join db_c.judge on Containerlist.Collo2 = judge.code
+  inner join db_a.Container2 on Containerlist."Container-no." = Container2."Container_numbers"
+order by db_a.Container2."Commision_num";
+
+CREATE table LOT_price("Commision_num" TEXT,"value_price" INTEGER,"packing_price" INTEGER,"freight_price" INTEGER);
+INSERT INTO LOT_price
+SELECT
+Commision_num,
+sum(values_of_goods)/4 as value_price,
+sum(packing_charges)/4 as packing_price,
+sum(freight_charges)/4 as freight_price
+from result
+group by Commision_num;
+
+CREATE TABLE result2 ("Commision_num" TEXT,"Container_numbers" text,
+"values_of_goods" INTEGER,"packing_charges" INTEGER,"freight_charges" INTEGER,"Collo2" TEXT,"code_long" text,
+"value_price" INTEGER,"packing_price" INTEGER,"freight_price" INTEGER);
+
+INSERT into result2
+
+SELECT
+result.*,
+LOT_price.value_price,
+LOT_price.packing_price,
+LOT_price.freight_price
+FROM LOT_price
+INNER JOIN result ON LOT_price.Commision_num = result.Commision_num;
+
+'''
+cxn3 = sqlite3.connect(Filename3)#主要想得到的結果Filename3='result.db'
+cur=cxn3.cursor()
+#cur.execute('''attach (%s) as db_b;''',%(Filename3,),)#join三張表，在空白的db裡面使用attach才不會有重複讀取的情況發生，並產生新的表輸入結果，但儲存後attach的表不會存在，只會剩下出的結果。
+cur.executescript(conbine) #executescript won't return anything
+wb3=pd.read_sql_query("Select * from result2",con=cxn3)
+#判斷是否有重複再加入RResult
+cxn31 = sqlite3.connect("RResult.db")
+cur31=cxn31.cursor()
+find2=0
+cur31.execute('''select "Commision_num" from "RResult";''')
+Comm3=wb3['Commision_num']
+Comm4=list(Comm3)
+print("this is Comm4",Comm4)
+for rows in cur31:
+    for row in rows:
+        if row == Comm4[1]:
+            find2=1
+            
+if find2==1:
+    print("data exist")
+    cxn31.commit()
+    cxn31.close()
+else:
+    wb3.to_sql('RResult', cxn31, if_exists='append', index=False)
+    cxn31.commit()
+    cxn31.close()
+#price2=list(price)
+#data=pd.read_sql_table(result,'E:\Cousera Python\sqlite\1\result_2022-08-24.db')
+'''workbook = Workbook('output.xlsx')
+worksheet = workbook.add_worksheet()
+for i,row in enumerate(res):
+    for j,value in enumerate(row):
+        worksheet.write(i,j,value)
+workbook.close()'''
+#res=res.fetchone()#fetchall return[] fetchone retuen None ，don't know why
+#print(price2)
+cxn4 = sqlite3.connect(Filename4)
+cur4=cxn4.cursor()
+leftover='''
+DROP TABLE IF EXISTS Left;
+attach 'result.db' as db_a;
+attach 'ContainerList.db'as db_b;
+
+CREATE TABLE compare1(A text);
+INSERT INTO compare1 ("A") 
+SELECT "Container_numbers"
+from result
+where length("Container_numbers")=12
+GROUP by "Container_numbers";
+
+CREATE TABLE compare2(B text);
+INSERT INTO compare2 ("B") 
+SELECT "Container-no."
+from Containerlist
+where length("Container-no.")=12
+GROUP by "Container-no.";
+
+CREATE TABLE compare("leftout" text);
+INSERT INTO compare ("leftout") 
+select * from compare2
+       where compare2.B not in 
+       (select compare1.A from compare1);
+drop table compare1;
+drop table compare2;
+'''
+Search='''
+attach 'Container2.db' as db_a;
+CREATE TABLE compare2("Commision_num" text,"Container_numbers" text,"leftout" text);
+INSERT INTO compare2
+SELECT 
+  db_a.Container2."Commision_num",
+  db_a.Container2."Container_numbers",
+  compare.leftout
+from
+  compare
+  inner join db_a.Container2 on Container2."Container_numbers" = compare.leftout;
+
+'''
+#drop table db_a.Container2;
+#Search 會造成我的Container2不見了
+cur4.executescript(leftover)
+wb4=pd.read_sql_query("Select * from compare",con=cxn4)
+leftout=wb4['leftout']
+Leftout=list(leftout)
+print(Leftout)
+A=len(Leftout)
+print(A)
+cxn4.commit()
+cxn4.close()
+if A > 0:
+    cxn5=sqlite3.connect(Filename4)
+    cur5=cxn5.cursor()
+    cur5.executescript(Search)
+    print("Search execute")
+    wb5=pd.read_sql_query("Select * from compare2",con=cxn5)
+    lost1=wb5['Commision_num']
+    Lost1=list(lost1)
+    leftout=wb5['leftout']
+    Leftout=list(leftout)
+    print("Warning!lost container:",Leftout,"in",Lost1)
+    cxn5.commit()
+    cxn5.close()
+else:
+    print("no leftout container")
+
+
+
+
+
+
