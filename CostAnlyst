@@ -1,0 +1,27 @@
+#do it in sqlite easily,this is just a example
+#先把資料彙集在同一個sqlite
+attach 'Container_2022.db' as db_a;
+attach 'Container_2023.db'as db_b;
+#把2022年與2023的資料先合在一起
+WITH All_Containers AS (
+    SELECT Commision_num, invoice_date FROM db_a.Container2022
+    UNION ALL
+    SELECT Commision_num, invoice_date FROM db_b.Container2023
+)
+#在結論資料表中有相同的批號者，取出日期分為年份及月分，並把該月份船價平均
+SELECT 
+    substr(C.invoice_date, 7, 4) AS Analysis_Year,
+    substr(C.invoice_date, 1, 2) AS Analysis_Month,
+    R.code_long,
+    ROUND(AVG(R.freight_charges), 0) AS Avg_Freight_Price,
+    COUNT(*) AS Total_Shipments
+    
+FROM RResult AS R
+INNER JOIN All_Containers AS C 
+    ON R.Commision_num = C.Commision_num
+
+#若想針對貨櫃內已在先前資料處理時標好的內容物分別看，不然就用IS NOT NULL
+WHERE R.code_long IN ("KN")
+
+GROUP BY Analysis_Year, Analysis_Month, R.code_long
+ORDER BY Analysis_Year ASC, Analysis_Month ASC;
