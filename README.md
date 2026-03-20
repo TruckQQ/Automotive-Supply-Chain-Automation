@@ -1,6 +1,6 @@
 # Automotive-Supply-Chain-Automation
 ## Project Overview
-A comprehensive end-to-end automation suite designed for the automotive supply chain. This suite streamlines the lifecycle of logistics data—from unstructured PDF parsing to real-time tracking navigation and long-term cost trend analysis.
+A comprehensive end-to-end automation suite designed for the automotive supply chain. This suite streamlines the length of logistics data—from unstructured PDF parsing to real-time tracking navigation and long-term cost trend analysis.
 
 ## Step 1. Read Container number from excel -> automate key in web address
 <img width="1726" height="973" alt="image" src="https://github.com/user-attachments/assets/86f9a976-034b-4971-83b1-8cd65ac7bd67" />
