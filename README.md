@@ -12,7 +12,7 @@ A comprehensive end-to-end automation suite designed for the automotive supply c
 ## Step 2. Automated Data Extraction (ReadPDF) Read Container infrormation -> automate output in excel and sqlite
 
 * Engineered a Python-based parser using PyPDF2 and Regex to extract financial data from complex invoice structures.
-* Implemented data normalization logic to handle version drift and formatting noise, ensuring 100% data integrity before SQL injection
+
 
 ## Step 3. Read Container other information -> automate join and detect lost data -> print out in excel and sqlite
 
